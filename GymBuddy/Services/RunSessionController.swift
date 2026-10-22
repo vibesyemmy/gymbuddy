@@ -7,6 +7,7 @@ final class RunSessionController {
     enum State { case idle, running, paused, finished }
 
     let week: RunWeek
+    let mode: CardioMode
     let tracker = LocationTracker()
     private(set) var state: State = .idle
     private(set) var engine: IntervalEngine
@@ -17,9 +18,11 @@ final class RunSessionController {
     @ObservationIgnored private var lastTick: Date?
     @ObservationIgnored private let cues = CueSpeaker()
 
-    init(week: RunWeek) {
+    init(week: RunWeek, mode: CardioMode = .intervals) {
         self.week = week
-        self.engine = IntervalEngine(segments: week.segments)
+        self.mode = mode
+        // Open-ended walks and runs have no segments to step through.
+        self.engine = IntervalEngine(segments: mode == .intervals ? week.segments : [])
     }
 
     func start() {
@@ -30,7 +33,11 @@ final class RunSessionController {
         UIApplication.shared.isIdleTimerDisabled = true
         startedAt = .now
         state = .running
-        handle(engine.start())
+        if mode == .intervals {
+            handle(engine.start())
+        } else {
+            cues.say(mode == .walk ? "Walk started." : "Run started.")
+        }
         beginTimer()
     }
 
@@ -76,7 +83,7 @@ final class RunSessionController {
         let dt = now.timeIntervalSince(lastTick ?? now)
         lastTick = now
         elapsed += dt
-        handle(engine.advance(by: dt))
+        if mode == .intervals { handle(engine.advance(by: dt)) }
     }
 
     private func handle(_ events: [EngineEvent]) {

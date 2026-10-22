@@ -7,16 +7,23 @@ struct RunView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var controller: RunSessionController
+    /// Begins the session as soon as the screen appears, instead of waiting for the Start button.
+    private let autoStart: Bool
+    private let mode: CardioMode
 
-    init(week: RunWeek) {
+    init(week: RunWeek, mode: CardioMode = .intervals, autoStart: Bool = false) {
         self.week = week
-        _controller = State(initialValue: RunSessionController(week: week))
+        self.mode = mode
+        self.autoStart = autoStart
+        _controller = State(initialValue: RunSessionController(week: week, mode: mode))
     }
 
     var body: some View {
         VStack(spacing: 24) {
             switch controller.state {
-            case .idle: idleView
+            case .idle:
+                // When auto-starting, show nothing for the instant before the session begins.
+                if autoStart { Color.clear } else { idleView }
             case .running, .paused: activeView
             case .finished: summaryView
             }
@@ -25,9 +32,12 @@ struct RunView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.page.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .navigationTitle("Week \(week.number) run")
+        .navigationTitle(mode == .intervals ? "Week \(week.number)" : mode.title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(controller.state == .running || controller.state == .paused)
+        .onAppear {
+            if autoStart && controller.state == .idle { controller.start() }
+        }
     }
 
     // MARK: Idle
@@ -55,9 +65,18 @@ struct RunView: View {
 
     // MARK: Active
 
+    /// The phase shown in the header: the current segment, or a steady walk/run for open-ended sessions.
+    private var displayPhase: RunPhase? {
+        switch mode {
+        case .intervals: controller.engine.current?.phase
+        case .walk: .walk
+        case .run: .run
+        }
+    }
+
     private var activeView: some View {
         let engine = controller.engine
-        let phase = engine.current?.phase
+        let phase = displayPhase
         let duration = engine.current?.duration ?? 1
         let progress = 1 - engine.remainingInSegment / max(duration, 1)
         return VStack(spacing: 20) {
@@ -80,14 +99,22 @@ struct RunView: View {
                 }
             }
 
-            ZStack {
-                ArcProgress(progress: progress, tint: color(for: phase))
-                Text(Format.clock(engine.remainingInSegment))
+            if mode.isOpenEnded {
+                // No segments to count down, so show time so far.
+                Text(Format.clock(controller.elapsed))
                     .font(.system(size: 84, weight: .light)).monospacedDigit()
                     .foregroundStyle(Theme.textPrimary)
-                    .offset(y: 20)
+                    .frame(height: 230)
+            } else {
+                ZStack {
+                    ArcProgress(progress: progress, tint: color(for: phase))
+                    Text(Format.clock(engine.remainingInSegment))
+                        .font(.system(size: 84, weight: .light)).monospacedDigit()
+                        .foregroundStyle(Theme.textPrimary)
+                        .offset(y: 20)
+                }
+                .frame(height: 230)
             }
-            .frame(height: 230)
 
             Spacer(minLength: 0)
 
@@ -137,11 +164,13 @@ struct RunView: View {
         let sampled = route.enumerated().filter { $0.offset % stride == 0 }.map(\.element)
         context.insert(RunLog(
             date: controller.startedAt ?? .now,
-            week: week.number,
+            // Open-ended walks and runs aren't part of a plan week.
+            week: mode == .intervals ? week.number : 0,
             distanceMeters: controller.tracker.distanceMeters,
             duration: controller.elapsed,
             routeLat: sampled.map(\.latitude),
-            routeLon: sampled.map(\.longitude)
+            routeLon: sampled.map(\.longitude),
+            activity: mode.activityLabel
         ))
         dismiss()
     }

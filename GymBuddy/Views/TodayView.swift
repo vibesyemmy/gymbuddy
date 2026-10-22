@@ -1,10 +1,21 @@
 import SwiftData
 import SwiftUI
 
+/// Where a session card can lead: its detail screen, or straight into the workout.
+private enum TodayRoute: Hashable {
+    case cardioDetail
+    case cardioActive(CardioMode)
+    case gymDetail(String)
+    case gymActive(String)
+}
+
 struct TodayView: View {
     @AppStorage("programStart") private var programStart: Double = 0
     @Query(sort: \GymLog.date, order: .reverse) private var gymLogs: [GymLog]
     @Query(sort: \RunLog.date, order: .reverse) private var runLogs: [RunLog]
+    @State private var path: [TodayRoute] = []
+    /// What the walk/run card's play button starts; changed on its detail screen.
+    @AppStorage("cardioMode") private var cardioMode: CardioMode = .intervals
 
     private var week: Int {
         Schedule.programWeek(start: Date(timeIntervalSince1970: programStart), now: .now)
@@ -32,16 +43,38 @@ struct TodayView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ThemedScroll {
                 header
                 weekStrip
                 statTiles
-                todayCard
-                sessionsCard
+                sessionsSection
             }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: TodayRoute.self) { route in
+                destination(for: route)
+            }
+        }
+    }
+
+    /// The Start buttons replace the whole path, so finishing or leaving a workout returns to Today
+    /// rather than to the detail screen.
+    @ViewBuilder
+    private func destination(for route: TodayRoute) -> some View {
+        switch route {
+        case .cardioDetail:
+            CardioDetailView(week: runWeek, mode: $cardioMode) { mode in path = [.cardioActive(mode)] }
+        case .cardioActive(let mode):
+            RunView(week: runWeek, mode: mode, autoStart: true)
+        case .gymDetail(let key):
+            if let day = GymPlan.days.first(where: { $0.key == key }) {
+                GymDetailView(day: day) { path = [.gymActive(key)] }
+            }
+        case .gymActive(let key):
+            if let day = GymPlan.days.first(where: { $0.key == key }) {
+                GymView(day: day)
+            }
         }
     }
 
@@ -87,75 +120,114 @@ struct TodayView: View {
     private var statTiles: some View {
         HStack(spacing: 8) {
             StatTile(label: "Gym", value: "\(weekGym)", unit: "/ 3")
-            StatTile(label: "Runs", value: "\(weekRuns.count)", unit: "/ 3")
-            StatTile(label: "Run km", value: Format.km(weekRuns.reduce(0) { $0 + $1.distanceMeters }))
+            StatTile(label: "Walk / run", value: "\(weekRuns.count)", unit: "/ 3")
+            StatTile(label: "Walk / run km", value: Format.km(weekRuns.reduce(0) { $0 + $1.distanceMeters }))
         }
     }
 
-    @ViewBuilder
-    private var todayCard: some View {
-        switch Schedule.session(on: .now) {
-        case .gym:
-            NavigationLink { GymView(day: nextGymDay) } label: {
-                featureCard(kind: "Gym day", title: nextGymDay.title,
-                            detail: "\(nextGymDay.exercises.count) exercises · about 45 min", icon: "dumbbell.fill", tint: Theme.red)
-            }
-            .buttonStyle(.plain)
-        case .run:
-            NavigationLink { RunView(week: runWeek) } label: {
-                featureCard(kind: "Run day", title: "Week \(runWeek.number) run",
-                            detail: "\(runWeek.title) · \(runWeek.totalMinutes) min", icon: "figure.run", tint: Theme.mint)
-            }
-            .buttonStyle(.plain)
-        case .rest:
-            Card {
-                SectionLabel("Rest day")
-                Text("Easy walk if you feel like it.")
-                    .font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                Text("Recovery is when you grow.")
+    // MARK: Sessions
+
+    /// All sessions in one place: the walk/run card is the big one, the gym days sit below as squares.
+    /// Tapping a card opens its details; its play button starts the workout straight away.
+    private var sessionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel("Sessions")
+                Text("Walk, run or lift. Pick whatever suits today.")
                     .font(.system(size: 14)).foregroundStyle(Theme.textSecondary)
             }
-        }
-    }
-
-    /// Dark hero card, the Today equivalent of Peloton's "Up next in your program".
-    private func featureCard(kind: String, title: String, detail: String, icon: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                SectionLabel(kind).foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                Image(systemName: icon).foregroundStyle(tint)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 24, weight: .semibold)).foregroundStyle(.white)
-                Text(detail).font(.system(size: 14)).foregroundStyle(.white.opacity(0.7))
-            }
+            walkRunCard
             HStack(spacing: 8) {
-                Image(systemName: "play.fill").font(.system(size: 13, weight: .bold))
-                Text("START").font(.system(size: 15, weight: .semibold)).tracking(1)
+                ForEach(GymPlan.days) { day in
+                    gymCard(day)
+                }
             }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity).frame(height: 48)
-            .background(Theme.red, in: Capsule())
+            Text("Tap a card for the full list. Tap the play button to start right away.")
+                .font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
         }
-        .padding(16)
-        .background(Color(hex: 0x1B1D21), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
     }
 
-    private var sessionsCard: some View {
-        Card {
-            SectionLabel("Do a different session")
-            NavigationLink { RunView(week: runWeek) } label: {
-                TileRow(icon: "figure.run", title: "Run/walk intervals", subtitle: runWeek.title)
+    private var walkRunCard: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Button { path.append(.cardioDetail) } label: {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        SectionLabel("Walk / run").foregroundStyle(.white.opacity(0.7))
+                        Spacer()
+                        Image(systemName: cardioMode.icon).foregroundStyle(Theme.mint)
+                    }
+                    Spacer(minLength: 0)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(cardioMode == .intervals ? "Week \(runWeek.number)" : "Free \(cardioMode.title.lowercased())")
+                            .font(.system(size: 28, weight: .semibold)).foregroundStyle(.white)
+                        Text(cardioMode == .intervals ? "\(runWeek.title) · \(runWeek.totalMinutes) min" : "Your own pace · tracked by GPS")
+                            .font(.system(size: 14)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    // Leaves room for the play button.
+                    .padding(.trailing, 56)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .leading)
+                .background(Color(hex: 0x1B1D21), in: RoundedRectangle(cornerRadius: Theme.cardRadius))
             }
             .buttonStyle(.plain)
-            ForEach(GymPlan.days) { day in
-                NavigationLink { GymView(day: day) } label: {
-                    TileRow(icon: "dumbbell.fill", title: day.title,
-                            subtitle: day.exercises.map(\.name).joined(separator: ", "))
-                }
-                .buttonStyle(.plain)
+            .accessibilityHint("Opens the walk and run options")
+
+            PlayButton(label: cardioMode == .intervals ? "Start week \(runWeek.number) intervals" : "Start free \(cardioMode.title.lowercased())", size: 44) {
+                path.append(.cardioActive(cardioMode))
             }
+            .padding(8)
         }
+    }
+
+    private func gymCard(_ day: GymDay) -> some View {
+        let isHighlighted = day.key == nextGymDay.key
+        return ZStack(alignment: .topTrailing) {
+            Button { path.append(.gymDetail(day.key)) } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Image(systemName: "dumbbell.fill").font(.system(size: 18)).foregroundStyle(Theme.red)
+                    Spacer(minLength: 8)
+                    if isHighlighted {
+                        Text("NEXT")
+                            .font(.system(size: 10, weight: .semibold)).tracking(1).foregroundStyle(Theme.red)
+                    }
+                    Text(day.title)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                        .lineLimit(2).multilineTextAlignment(.leading)
+                    Text("\(day.exercises.count) exercises")
+                        .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .aspectRatio(1, contentMode: .fit)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius))
+                .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius).strokeBorder(isHighlighted ? Theme.red : .clear, lineWidth: 1.5))
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the full exercise list")
+
+            PlayButton(label: "Start \(day.title)", size: 34) { path.append(.gymActive(day.key)) }
+                .padding(4)
+        }
+    }
+}
+
+/// Round red play button. Its tap area is at least 44 points even when the circle is smaller.
+private struct PlayButton: View {
+    let label: String
+    let size: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "play.fill")
+                .font(.system(size: size * 0.4, weight: .bold)).foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(Theme.red, in: Circle())
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }

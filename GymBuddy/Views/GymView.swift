@@ -25,6 +25,7 @@ struct GymView: View {
     @State private var rows: [ExerciseRow] = []
     @State private var restRemaining = 0
     @State private var elapsed = 0
+    @State private var guideExercise: Exercise?
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var completedBlocks: Int {
@@ -49,6 +50,7 @@ struct GymView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .preferredColorScheme(.dark)
+        .sheet(item: $guideExercise) { ExerciseGuideView(exercise: $0) }
         .onAppear(perform: buildRows)
         .onReceive(ticker) { _ in
             elapsed += 1
@@ -76,10 +78,16 @@ struct GymView: View {
     private func exerciseCard(_ row: Binding<ExerciseRow>) -> some View {
         let exercise = row.wrappedValue.exercise
         return Card {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(exercise.name).font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-                Text("\(exercise.target) \(exercise.unit) · rest \(exercise.restSeconds)s")
-                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(exercise.name).font(.system(size: 20, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                    Text("\(exercise.target) \(exercise.unit) · rest \(exercise.restSeconds)s")
+                        .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                if ExerciseGuides.guide(for: exercise.name) != nil {
+                    FormButton(exerciseName: exercise.name) { guideExercise = exercise }
+                }
             }
             Text(row.wrappedValue.hint)
                 .font(.system(size: 12, weight: .medium))
