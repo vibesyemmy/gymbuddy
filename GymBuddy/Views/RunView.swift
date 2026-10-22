@@ -21,7 +21,10 @@ struct RunView: View {
             case .finished: summaryView
             }
         }
-        .padding()
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.page.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .navigationTitle("Week \(week.number) run")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(controller.state == .running || controller.state == .paused)
@@ -30,70 +33,98 @@ struct RunView: View {
     // MARK: Idle
 
     private var idleView: some View {
-        VStack(spacing: 20) {
-            Text(week.title).font(.title2.bold()).multilineTextAlignment(.center)
-            Text("5 min warm-up walk, intervals, 5 min cool-down · about \(week.totalMinutes) min")
-                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Text("Run at a pace where you could still hold a conversation. Walk intervals are part of the plan, not a failure.")
-                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        VStack(spacing: 16) {
+            Card {
+                SectionLabel("Run / walk intervals")
+                Text(week.title).font(.system(size: 24, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                Text("5 min warm-up walk, intervals, 5 min cool-down · about \(week.totalMinutes) min")
+                    .font(.system(size: 14)).foregroundStyle(Theme.textSecondary)
+                Text("Run at a pace where you could still hold a conversation. Walk intervals are part of the plan, not a failure.")
+                    .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.tile, in: RoundedRectangle(cornerRadius: Theme.tileRadius))
+            }
             if controller.tracker.isDenied {
                 Text("Location access is off, so distance can't be tracked. Enable it in Settings > GymBuddy > Location.")
-                    .font(.footnote).foregroundStyle(.red).multilineTextAlignment(.center)
+                    .font(.system(size: 13)).foregroundStyle(Theme.red).multilineTextAlignment(.center)
             }
             Spacer()
-            bigButton("Start", color: .green) { controller.start() }
+            PrimaryButton(title: "Start", icon: "play.fill") { controller.start() }
         }
     }
 
     // MARK: Active
 
     private var activeView: some View {
-        VStack(spacing: 20) {
-            let phase = controller.engine.current?.phase
-            Text((phase?.label ?? "").uppercased())
-                .font(.system(size: 40, weight: .black, design: .rounded))
-                .foregroundStyle(color(for: phase))
-            Text(Format.clock(controller.engine.remainingInSegment))
-                .font(.system(size: 88, weight: .bold, design: .rounded).monospacedDigit())
-            if let next = controller.engine.next {
-                Text("Next: \(next.phase.label) \(Format.clock(next.duration))")
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        let engine = controller.engine
+        let phase = engine.current?.phase
+        let duration = engine.current?.duration ?? 1
+        let progress = 1 - engine.remainingInSegment / max(duration, 1)
+        return VStack(spacing: 20) {
             HStack {
-                metric("Time", Format.clock(controller.elapsed))
-                metric("km", Format.km(controller.tracker.distanceMeters))
-                metric("Pace /km", Format.pace(distance: controller.tracker.distanceMeters, duration: controller.elapsed))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text((phase?.label ?? "").uppercased())
+                        .font(.system(size: 22, weight: .semibold)).tracking(1.5)
+                        .foregroundStyle(color(for: phase))
+                    if let next = engine.next {
+                        Text("Next: \(next.phase.label) \(Format.clock(next.duration))")
+                            .font(.system(size: 13)).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                Spacer()
+                RoundIconButton(icon: "stop.fill", fill: Theme.tile) { controller.finish() }
+                if controller.state == .paused {
+                    RoundIconButton(icon: "play.fill", fill: Theme.red) { controller.resume() }
+                } else {
+                    RoundIconButton(icon: "pause.fill", fill: Theme.red) { controller.pause() }
+                }
             }
-            if controller.state == .paused {
-                bigButton("Resume", color: .green) { controller.resume() }
-            } else {
-                bigButton("Pause", color: .orange) { controller.pause() }
+
+            ZStack {
+                ArcProgress(progress: progress, tint: color(for: phase))
+                Text(Format.clock(engine.remainingInSegment))
+                    .font(.system(size: 84, weight: .light)).monospacedDigit()
+                    .foregroundStyle(Theme.textPrimary)
+                    .offset(y: 20)
             }
-            Button("End workout", role: .destructive) { controller.finish() }
+            .frame(height: 230)
+
+            Spacer(minLength: 0)
+
+            Card {
+                HStack {
+                    metric("Time", Format.clock(controller.elapsed))
+                    metric("km", Format.km(controller.tracker.distanceMeters))
+                    metric("Pace /km", Format.pace(distance: controller.tracker.distanceMeters, duration: controller.elapsed))
+                }
+            }
         }
     }
 
     // MARK: Summary
 
     private var summaryView: some View {
-        VStack(spacing: 20) {
-            Text("Nice work").font(.largeTitle.bold())
-            HStack {
-                metric("Time", Format.clock(controller.elapsed))
-                metric("km", Format.km(controller.tracker.distanceMeters))
-                metric("Pace /km", Format.pace(distance: controller.tracker.distanceMeters, duration: controller.elapsed))
+        VStack(spacing: 16) {
+            Card {
+                SectionLabel("Workout complete")
+                Text("Nice work").font(.system(size: 28, weight: .semibold)).foregroundStyle(Theme.textPrimary)
+                HStack {
+                    metric("Time", Format.clock(controller.elapsed))
+                    metric("km", Format.km(controller.tracker.distanceMeters))
+                    metric("Pace /km", Format.pace(distance: controller.tracker.distanceMeters, duration: controller.elapsed))
+                }
             }
             Map {
                 if controller.tracker.route.count > 1 {
-                    MapPolyline(coordinates: controller.tracker.route).stroke(.blue, lineWidth: 5)
+                    MapPolyline(coordinates: controller.tracker.route).stroke(Theme.red, lineWidth: 5)
                 }
             }
             .frame(height: 240)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius))
             Spacer()
-            bigButton("Save", color: .green) { save() }
-            Button("Discard", role: .destructive) { dismiss() }
+            PrimaryButton(title: "Save", icon: "checkmark") { save() }
+            Button("Discard") { dismiss() }
+                .font(.system(size: 15, weight: .medium)).foregroundStyle(Theme.textSecondary)
         }
     }
 
@@ -117,25 +148,57 @@ struct RunView: View {
 
     private func color(for phase: RunPhase?) -> Color {
         switch phase {
-        case .run: return .green
-        case .walk, .warmup, .cooldown: return .blue
-        case nil: return .primary
+        case .run: return Theme.mint
+        case .walk, .warmup, .cooldown: return Theme.blue
+        case nil: return Theme.textPrimary
         }
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
-        VStack {
-            Text(value).font(.title.bold().monospacedDigit())
-            Text(label).font(.caption).foregroundStyle(.secondary)
+        VStack(spacing: 2) {
+            Text(value).font(.system(size: 24, weight: .medium)).monospacedDigit().foregroundStyle(Theme.textPrimary)
+            Text(label).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
+}
 
-    private func bigButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title).font(.title2.bold()).frame(maxWidth: .infinity).padding()
-                .background(color, in: RoundedRectangle(cornerRadius: 16))
-                .foregroundStyle(.white)
+/// Open-bottom arc that fills clockwise, like Peloton's exercise timer.
+private struct ArcProgress: View {
+    let progress: Double
+    let tint: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height * 1.6)
+            ZStack {
+                arc(1).stroke(Theme.divider, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                arc(min(max(progress, 0.001), 1)).stroke(tint, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+            }
+            .frame(width: side, height: side)
+            .position(x: proxy.size.width / 2, y: side / 2 + 5)
         }
+    }
+
+    /// 200° sweep from lower-left over the top to lower-right.
+    private func arc(_ fraction: Double) -> some Shape {
+        ArcShape(fraction: fraction)
+    }
+}
+
+private struct ArcShape: Shape {
+    var fraction: Double
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let start = Angle.degrees(170)
+        let sweep = 200.0
+        path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2,
+                    startAngle: start, endAngle: start + .degrees(sweep * fraction), clockwise: false)
+        return path
     }
 }
