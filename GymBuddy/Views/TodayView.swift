@@ -53,7 +53,9 @@ struct TodayView: View {
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: TodayRoute.self) { route in
+                // Detail and workout screens use the full screen, with their own Start and bottom bars.
                 destination(for: route)
+                    .toolbar(.hidden, for: .tabBar)
             }
         }
     }
