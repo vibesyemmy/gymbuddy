@@ -1,0 +1,37 @@
+name: GymBuddy
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "17.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  GymBuddy:
+    type: application
+    platform: iOS
+    sources: [GymBuddy]
+    info:
+      path: GymBuddy/Info.plist
+      properties:
+        CFBundleDisplayName: GymBuddy
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIBackgroundModes: [location, audio]
+        NSLocationWhenInUseUsageDescription: GymBuddy uses your location to track the distance and route of your runs and walks.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.gymbuddy
+    scheme:
+      testTargets: [GymBuddyTests]
+  GymBuddyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [GymBuddyTests]
+    dependencies:
+      - target: GymBuddy
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
