@@ -21,9 +21,16 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIBackgroundModes: [location, audio]
         NSLocationWhenInUseUsageDescription: GymBuddy uses your location to track the distance and route of your runs and walks.
+        NSHealthShareUsageDescription: GymBuddy reads your past workouts from Health so your earlier runs, walks and other activities show up in your progress.
+    entitlements:
+      path: GymBuddy/GymBuddy.entitlements
+      properties:
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.gymbuddy
+        # iPhone only: the app is portrait-only, which iPad apps aren't allowed to be.
+        TARGETED_DEVICE_FAMILY: "1"
     scheme:
       testTargets: [GymBuddyTests]
   GymBuddyTests:
