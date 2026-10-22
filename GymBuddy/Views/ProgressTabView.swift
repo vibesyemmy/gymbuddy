@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ProgressTabView: View {
     @AppStorage("heightCm") private var heightCm: Double = 182.9
+    @AppStorage("age") private var age: Int = 40
     @Query(sort: \BodyEntry.date) private var entries: [BodyEntry]
     @Query(sort: \RunLog.date, order: .reverse) private var runs: [RunLog]
     @State private var showingAdd = false
@@ -21,7 +22,9 @@ struct ProgressTabView: View {
                             LabeledContent("Waist", value: "\(Format.kg(waist)) cm")
                             LabeledContent("Waist ÷ height", value: String(format: "%.2f", waist / heightCm))
                         }
-                        LabeledContent("Daily protein target", value: "\(Int((latest.weightKg * 1.8 / 5).rounded()) * 5) g")
+                        LabeledContent("Daily calories (fat loss)", value: "\(Nutrition.cutCalories(weightKg: latest.weightKg, heightCm: heightCm, age: age)) kcal")
+                        LabeledContent("Maintenance", value: "\(Nutrition.maintenanceCalories(weightKg: latest.weightKg, heightCm: heightCm, age: age)) kcal")
+                        LabeledContent("Daily protein target", value: "\(Nutrition.proteinGrams(weightKg: latest.weightKg)) g")
                     } else {
                         Text("Add your first entry to start tracking.").foregroundStyle(.secondary)
                     }

@@ -52,4 +52,11 @@ final class IntervalEngineTests: XCTestCase {
         XCTAssertEqual(Schedule.programWeek(start: date(19), now: date(19), calendar: calendar), 1)
         XCTAssertEqual(Schedule.programWeek(start: date(19), now: date(26), calendar: calendar), 2)
     }
+
+    func testNutritionForA40YearOldMan() {
+        XCTAssertEqual(Nutrition.restingCalories(weightKg: 83.6, heightCm: 182.9, age: 40), 1784.1, accuracy: 0.1)
+        XCTAssertEqual(Nutrition.maintenanceCalories(weightKg: 83.6, heightCm: 182.9, age: 40), 2765)
+        XCTAssertEqual(Nutrition.cutCalories(weightKg: 83.6, heightCm: 182.9, age: 40), 2265)
+        XCTAssertEqual(Nutrition.proteinGrams(weightKg: 83.6), 150)
+    }
 }
