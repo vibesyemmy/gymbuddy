@@ -21,6 +21,10 @@ struct ProgressTabView: View {
                         if let waist = latest.waistCm {
                             LabeledContent("Waist", value: "\(Format.kg(waist)) cm")
                             LabeledContent("Waist ÷ height", value: String(format: "%.2f", waist / heightCm))
+                            if let neck = latest.neckCm,
+                               let bodyFat = Nutrition.navyBodyFat(waistCm: waist, neckCm: neck, heightCm: heightCm) {
+                                LabeledContent("Body fat (estimate)", value: String(format: "%.1f%%", bodyFat))
+                            }
                         }
                         LabeledContent("Daily calories (fat loss)", value: "\(Nutrition.cutCalories(weightKg: latest.weightKg, heightCm: heightCm, age: age)) kcal")
                         LabeledContent("Maintenance", value: "\(Nutrition.maintenanceCalories(weightKg: latest.weightKg, heightCm: heightCm, age: age)) kcal")
@@ -28,7 +32,7 @@ struct ProgressTabView: View {
                     } else {
                         Text("Add your first entry to start tracking.").foregroundStyle(.secondary)
                     }
-                    Text("Abs show through when waist ÷ height is roughly 0.45 or lower. Measure your waist at the navel, relaxed, every week at the same time.")
+                    Text("Abs show through when waist ÷ height is roughly 0.45 or lower. Measure your waist at the navel (relaxed, not sucked in) and your neck just below the larynx, once a week at the same time. Body fat from tape measures is an estimate; watch the trend, not the number.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
 
@@ -82,6 +86,7 @@ private struct AddEntrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var weightText: String
     @State private var waistText = ""
+    @State private var neckText = ""
 
     init(lastWeight: Double) {
         _weightText = State(initialValue: String(format: "%.1f", lastWeight))
@@ -96,6 +101,7 @@ private struct AddEntrySheet: View {
             Form {
                 TextField("Weight (kg)", text: $weightText).keyboardType(.decimalPad)
                 TextField("Waist at navel (cm), optional", text: $waistText).keyboardType(.decimalPad)
+                TextField("Neck (cm), optional, for body fat", text: $neckText).keyboardType(.decimalPad)
             }
             .navigationTitle("New entry")
             .navigationBarTitleDisplayMode(.inline)
@@ -104,7 +110,7 @@ private struct AddEntrySheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         if let weight = parse(weightText) {
-                            context.insert(BodyEntry(weightKg: weight, waistCm: parse(waistText)))
+                            context.insert(BodyEntry(weightKg: weight, waistCm: parse(waistText), neckCm: parse(neckText)))
                             dismiss()
                         }
                     }

@@ -55,10 +55,12 @@ final class BodyEntry {
     var date: Date
     var weightKg: Double
     var waistCm: Double?
+    var neckCm: Double?
 
-    init(date: Date = .now, weightKg: Double, waistCm: Double?) {
+    init(date: Date = .now, weightKg: Double, waistCm: Double?, neckCm: Double? = nil) {
         self.date = date
         self.weightKg = weightKg
         self.waistCm = waistCm
+        self.neckCm = neckCm
     }
 }

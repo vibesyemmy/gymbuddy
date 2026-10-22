@@ -23,4 +23,10 @@ enum Nutrition {
     private static func roundedTo5(_ value: Double) -> Int {
         Int((value / 5).rounded()) * 5
     }
+
+    /// US Navy body fat estimate for men, from waist and neck circumference (cm). Accurate to a few percent at best.
+    static func navyBodyFat(waistCm: Double, neckCm: Double, heightCm: Double) -> Double? {
+        guard waistCm > neckCm else { return nil }
+        return 86.010 * log10(waistCm - neckCm) - 70.041 * log10(heightCm) + 36.76
+    }
 }

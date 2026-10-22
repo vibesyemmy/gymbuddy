@@ -59,4 +59,10 @@ final class IntervalEngineTests: XCTestCase {
         XCTAssertEqual(Nutrition.cutCalories(weightKg: 83.6, heightCm: 182.9, age: 40), 2265)
         XCTAssertEqual(Nutrition.proteinGrams(weightKg: 83.6), 150)
     }
+
+    func testNavyBodyFat() throws {
+        let bodyFat = try XCTUnwrap(Nutrition.navyBodyFat(waistCm: 95, neckCm: 38, heightCm: 182.9))
+        XCTAssertEqual(bodyFat, 29.3, accuracy: 0.2)
+        XCTAssertNil(Nutrition.navyBodyFat(waistCm: 35, neckCm: 38, heightCm: 182.9))
+    }
 }
